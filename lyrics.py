@@ -107,8 +107,6 @@ def lyrics_tag(paths, force=False):
 		else:
 			print 'Skipping: ' + mf.artist + ' : ' + mf.title
 			
-	
-DEFAULT_LYRICS_FORCE = False
 lyrics_cmd = Subcommand('lyrics', help='fetch lyrics')
 def lyrics_func(lib, config, opts, args):
 	force  = opts.force  if opts.force  is not None else \
