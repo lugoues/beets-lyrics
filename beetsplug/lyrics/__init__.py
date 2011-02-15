@@ -9,9 +9,8 @@ from beets import ui
 from beets.ui import print_
 from beets.ui import Subcommand
 
-sys.path.append('./engines')
-from engines import *
-from engines.engine import *
+from beetsplug.lyrics.engines import *
+from beetsplug.lyrics.engines.engine import *
 
 from twisted.internet import reactor, threads, defer
 
