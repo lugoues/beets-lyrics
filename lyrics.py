@@ -1,20 +1,13 @@
 #parts of this plugin were borrowed from https://github.com/Xjs/lyricwiki/blob/master/lyricwiki.py
-import os
-import logging
-import shutil
-import logging
-import sys
-import unicodedata
+import os, logging, shutil, logging, sys, unicodedata
 
 from beets.plugins import BeetsPlugin
 from beets import autotag
-from beets.autotag import mb
 from beets.mediafile import MediaFile, FileTypeError, UnreadableFileError, FileTypeError
-
-from beets.ui import Subcommand
+from beets import library
 from beets import ui
 from beets.ui import print_
-from beets import library
+from beets.ui import Subcommand
 
 sys.path.append('./engines')
 from engines import *
@@ -85,6 +78,7 @@ def lyrics_func(lib, config, opts, args):
             DEFAULT_LYRICS_FORCE, bool)
 			
 	engines = ui.config_val(config, 'lyrics', 'engines', '').split()
+	
 	if( len(engines) == 0):
 		engines = DEFAULT_ENGINES
 	
