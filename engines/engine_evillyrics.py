@@ -87,7 +87,7 @@ class evillyrics(engine.engine):
 		enc_title = unicode(title,self.locale).encode('windows-1252')
 		#url="http://www.evillabs.sk/evillyrics/getkaraoke.php?artist=%s&song=%s" % (urllib.quote_plus(artist),urllib.quote_plus(title))
 		url="http://www.evillabs.sk/evillyrics/gc2.php?artist=%s&song=%s" % (urllib.quote_plus(enc_artist),urllib.quote_plus(enc_title))
-		sys.stdout.write(url+'\n')
+		#sys.stdout.write(url+'\n')
 		try:
 			file=urllib.urlopen(url,None,self.proxy)
 			kas=file.read()

@@ -14,10 +14,23 @@ from engines import *
 from engines.engine import *
 
 DEFAULT_LYRICS_FORCE = False
-DEFAULT_ENGINES = ['ailrc','ALSong', 'baidu', 'cmdi', 'evillyrics', 'google', 'lrcdb', 'lyrdb', 'miniLyrics', 'sogou', 'ttPlayer', 'winampcn', 'youdao']
+DEFAULT_ENGINES = ['ailrc','ALSong', 'baidu', 'cdmi', 'evillyrics', 'google', 'lrcdb', 'lyrdb', 'miniLyrics', 'sogou', 'ttPlayer', 'winampcn', 'youdao']
+
+def scrubEncoding(str):
+	encoding = sys.getfilesystemencoding() or sys.getdefaultencoding()
+	try:
+		return str.encode(encoding)
+	except UnicodeError:
+		return str.encode('utf8')
 
 def find_lyrics(engines, artist, title):
-	eng, lyrList =  multiSearch(engines, artist, title)
+	try:
+		eng, lyrList =  multiSearch(engines, artist, title)
+	except TypeError:		
+		print engines
+		print artist
+		print title
+		return None;
 	
 	if( lyrList is None or len(lyrList) == 0):
 		print 'No Lyrics found for'
@@ -58,9 +71,8 @@ def lyrics_tag(engines, paths, force=False):
 			log.warn('unreadable file: ' + filepath)
 			continue		
 			
-		if( len(mf.lyrics) == 0 or force):			
-			#print_("Lyrics for: [%s - %s]" % (mf.artist, mf.title))
-			lyr = find_lyrics(engines, mf.artist, mf.title)
+		if( len(mf.lyrics) == 0 or force):								
+			lyr = find_lyrics(engines,scrubEncoding(mf.artist),scrubEncoding(mf.title))
 			
 			if( lyr ):
 				mf.lyrics = lyr				
