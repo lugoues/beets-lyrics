@@ -13,6 +13,9 @@ sys.path.append('./engines')
 from engines import *
 from engines.engine import *
 
+from twisted.internet import reactor, threads, defer
+
+
 DEFAULT_LYRICS_FORCE = False
 DEFAULT_ENGINES = ['ailrc','ALSong', 'baidu', 'cdmi', 'evillyrics', 'google', 'lrcdb', 'lyrdb', 'miniLyrics', 'sogou', 'ttPlayer', 'winampcn', 'youdao']
 
@@ -26,10 +29,7 @@ def scrubEncoding(str):
 def find_lyrics(engines, artist, title):
 	try:
 		eng, lyrList =  multiSearch(engines, artist, title)
-	except TypeError:		
-		print engines
-		print artist
-		print title
+	except TypeError:				
 		return None;
 	
 	if( lyrList is None or len(lyrList) == 0):
@@ -47,6 +47,27 @@ def find_lyrics(engines, artist, title):
 	else:
 		return None
 	
+def tag_file(engines, filepath, force):
+	try:
+		mf = MediaFile(filepath)			
+	except FileTypeError:
+		return 
+	except UnreadableFileError:
+		log.warn('unreadable file: ' + filepath)
+		return
+		
+	if( len(mf.lyrics) == 0 or force):								
+		lyr = find_lyrics(engines,scrubEncoding(mf.artist),scrubEncoding(mf.title))
+		
+		if( lyr ):
+			mf.lyrics = lyr				
+			mf.save()
+			print_("Lyrics for: [%s - %s]" % (mf.artist, mf.title), ui.colorize('green', 'Updated!'))
+		else:
+			print_("Lyrics for: [%s - %s]" % (mf.artist, mf.title), ui.colorize('red', 'Nothing Found'))
+	else:
+		print_("Lyrics for: [%s - %s]" % (mf.artist, mf.title), ui.colorize('yellow', 'Not Updated'))
+	
 	
 def lyrics_tag(engines, paths, force=False):
  for path in paths:
@@ -59,29 +80,28 @@ def lyrics_tag(engines, paths, force=False):
 	else:
 		# Just add the file.
 		filepaths = [path]
-
+			
+	ds = []
+  		
 	# Add all the files.
 	for filepath in filepaths:
-		try:
-			mf = MediaFile(filepath)
-			item = library.Item.from_path(filepath)
-		except FileTypeError:
-			continue
-		except UnreadableFileError:
-			log.warn('unreadable file: ' + filepath)
-			continue		
-			
-		if( len(mf.lyrics) == 0 or force):								
-			lyr = find_lyrics(engines,scrubEncoding(mf.artist),scrubEncoding(mf.title))
-			
-			if( lyr ):
-				mf.lyrics = lyr				
-				mf.save()
-				print_("Lyrics for: [%s - %s]" % (mf.artist, mf.title), ui.colorize('green', 'Updated!'))
-			else:
-				print_("Lyrics for: [%s - %s]" % (mf.artist, mf.title), ui.colorize('red', 'Nothing Found'))
-		else:
-			print_("Lyrics for: [%s - %s]" % (mf.artist, mf.title), ui.colorize('yellow', 'Not Updated'))
+		d = threads.deferToThread(tag_file,engines, filepath, force)	
+		ds.append(d)		
+		
+	dlist = defer.DeferredList(ds, consumeErrors=True)	
+	def stop_loop(x):	
+		print 'Done!'
+		reactor.stop()	
+		exit		
+	dlist.addCallback(stop_loop)
+	
+	def err_call(x):
+		print x
+		exit	
+	dlist.addErrback(err_call)	
+	
+	reactor.run()		
+
 			
 lyrics_cmd = Subcommand('lyrics', help='fetch lyrics')
 def lyrics_func(lib, config, opts, args):
