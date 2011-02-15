@@ -73,8 +73,10 @@ def lyrics_tag(engines, paths, force=False):
 				mf.lyrics = lyr				
 				mf.save()
 				print_("Lyrics for: [%s - %s]" % (mf.artist, mf.title), ui.colorize('green', 'Updated!'))
+			else:
+				print_("Lyrics for: [%s - %s]" % (mf.artist, mf.title), ui.colorize('red', 'Nothing Found'))
 		else:
-			print_("Lyrics for: [%s - %s]" % (mf.artist, mf.title), ui.colorize('red', 'Nothing Found'))
+			print_("Lyrics for: [%s - %s]" % (mf.artist, mf.title), ui.colorize('yellow', 'Not Updated'))
 			
 lyrics_cmd = Subcommand('lyrics', help='fetch lyrics')
 def lyrics_func(lib, config, opts, args):
