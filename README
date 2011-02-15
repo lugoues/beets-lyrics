@@ -1,0 +1,10 @@
+Hello!
+
+This is a test plugin for the beets music managment system. The engines module was borrowed from the lrcShow-X project [https://code.launchpad.net/lrcshow-x]. 
+
+Configuration:
+You can add '[Lyrics]' to your beetsconfig file now with two options 
+
+force: will force all updates all the time ( True, False)
+engines: comma deliminated list of engines you wish to search (Defaults to all engines). Order will determine priority
+    Available Engines:  ailrc, ALSong, baidu, cmdi, evillyrics, google, lrcdb, lyrdb, miniLyrics, sogou, ttPlayer, winampcn, youdao
