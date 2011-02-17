@@ -130,7 +130,7 @@ class evillyrics(engine.engine):
 			else:
 				return (None,timeout)
 		for url in urls:
-			sys.stdout.write(url+'\n')
+			#sys.stdout.write(url+'\n')
 			lyrics,timeout = plain_lyrics.getLyricsFromUrl(url,proxy=self.proxy)
 			if not timeout and lyrics:
 				lrc,difference = mergeTextAndKas(lyrics,kas)

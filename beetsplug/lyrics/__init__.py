@@ -11,7 +11,7 @@ from beetsplug.lyrics.utilites import *
 
 DEFAULT_LYRICS_FORCE = False
 DEFAULT_ENGINES = ['ailrc','ALSong', 'baidu', 'cdmi', 'evillyrics', 'google', 'lrcdb', 'lyrdb', 'miniLyrics', 'sogou', 'ttPlayer', 'winampcn', 'youdao']
-DEFAULT_PROCESS_COUNT = 5
+DEFAULT_PROCESS_COUNT = 10
 
 log = logging.getLogger('beets')
 log.addHandler(logging.StreamHandler())
@@ -62,16 +62,16 @@ class LyricsPlugin(BeetsPlugin):
 		for path in paths:
 			if os.path.isdir(path):
 				# Find all files in the directory.
-				filepaths = []
+				filepaths = []				
 				for root, dirs, files in autotag._sorted_walk(path):
-					for filename in files:
-						filepaths.append(os.path.join(root, filename))
+					for filename in files:						
+						filepaths.append(os.path.join(root, filename))						
 			else:
 				# Just add the file.
 				filepaths = [path]
-							
+														
 			try:					
-				pool = multiprocessing.Pool(processes=5)
+				pool = multiprocessing.Pool(processes=self.processcount)
 				mthd = MethodProxy(self, self.process_filepath)
 				pool.map( mthd, filepaths)
 				pool.close()								
@@ -85,9 +85,10 @@ class LyricsPlugin(BeetsPlugin):
 								
 	def process_filepath( self, filepath):
 		try:		
-			mf = MediaFile(filepath)														
-			lyrics = self.download_lyrics(mf)
-			self.tag_file(lyrics, mf)
+			mf = MediaFile(filepath)			
+			if( self.need_lyrics( mf)):
+				lyrics = self.download_lyrics(mf)
+				self.tag_file(lyrics, mf)
 		except KeyboardInterrupt:
 			raise KeyboardInterruptError()
 		except FileTypeError:												
@@ -125,14 +126,20 @@ class LyricsPlugin(BeetsPlugin):
 		else:
 			return  None
 		
+	def need_lyrics(self, mf):
+		if( len(mf.lyrics) > 0 and not self.force ):
+			print_("Lyrics for: [%s - %s]" % (mf.artist, mf.title), ui.colorize('yellow', 'Not Updated'))
+			return False
+		else:
+			return True
+		
+		
 	def tag_file(self, lyrics, mf):							
 		if( lyrics ):
 			if( len(mf.lyrics) == 0 or self.force):														
 				mf.lyrics = lyrics
 				mf.save()
-				print_("Lyrics for: [%s - %s]" % (mf.artist, mf.title), ui.colorize('green', 'Updated!'))			
-			else:
-				print_("Lyrics for: [%s - %s]" % (mf.artist, mf.title), ui.colorize('yellow', 'Not Updated'))
+				print_("Lyrics for: [%s - %s]" % (mf.artist, mf.title), ui.colorize('green', 'Updated!'))							
 		else:
 			print_("Lyrics for: [%s - %s]" % (mf.artist, mf.title), ui.colorize('red', 'Nothing Found'))
 		
