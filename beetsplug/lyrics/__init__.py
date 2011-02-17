@@ -1,12 +1,11 @@
-import os, logging, shutil, logging, sys, unicodedata
+import os, logging, logging, sys
 from importlib import import_module
 
-from beets import autotag, library, ui
-from beets.mediafile import MediaFile, FileTypeError, UnreadableFileError, FileTypeError
+from beets import autotag, ui
+from beets.mediafile import MediaFile, FileTypeError, UnreadableFileError
 from beets.plugins import BeetsPlugin
 from beets.ui import print_, Subcommand
 
-from engines import *
 from beetsplug.lyrics.engines.engine import *
 
 from twisted.internet import reactor, threads, defer
