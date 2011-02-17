@@ -1,4 +1,4 @@
-import os, logging, logging, sys
+import os, logging, logging, sys, multiprocessing, copy_reg, types
 from importlib import import_module
 
 from beets import autotag, ui
@@ -9,10 +9,9 @@ from beets.ui import print_, Subcommand
 from beetsplug.lyrics.engines.engine import *
 from beetsplug.lyrics.utilites import *
 
-from twisted.internet import reactor, threads, defer
-
 DEFAULT_LYRICS_FORCE = False
 DEFAULT_ENGINES = ['ailrc','ALSong', 'baidu', 'cdmi', 'evillyrics', 'google', 'lrcdb', 'lyrdb', 'miniLyrics', 'sogou', 'ttPlayer', 'winampcn', 'youdao']
+DEFAULT_PROCESS_COUNT = 5
 
 log = logging.getLogger('beets')
 log.addHandler(logging.StreamHandler())
@@ -23,11 +22,13 @@ class LyricsPlugin(BeetsPlugin):
 	proxy = None
 	locale = "utf-8"
 	force = False
+	processcount = 1
 		
 	def commands(self):
 		lyrics_cmd = Subcommand('lyrics', help='fetch lyrics')	
 		lyrics_cmd.func = self.lyrics_func
 		lyrics_cmd.parser.add_option('-f', '--force', action='store_true', default=None, help='overwrite tag updates')
+		lyrics_cmd.parser.add_option('-p', '--processes', action='store_true', default=4, help='number of concurrent threads to run')
 
 		return [lyrics_cmd]		
 				
@@ -41,7 +42,11 @@ class LyricsPlugin(BeetsPlugin):
 		engine_names = ui.config_val(config, 'lyrics', 'engines', '').split()
 		if( len(engine_names) == 0):
 			engine_names = DEFAULT_ENGINES
-
+			
+		#load process count
+		self.processcount  = opts.force  if opts.processes  is not None else \
+			ui.config_val(config, 'lyrics', 'processes', DEFAULT_PROCESS_COUNT)
+								
 		#load all requested engines		
 		for eng_name in engine_names:								
 			try:
@@ -50,9 +55,8 @@ class LyricsPlugin(BeetsPlugin):
 				print e
 
 		#start tagging
-		#lyrics_tag( engines, args, force)
 		self.process_directories(args)
-		
+	
 		
 	def process_directories(self, paths):
 		for path in paths:
@@ -66,44 +70,35 @@ class LyricsPlugin(BeetsPlugin):
 				# Just add the file.
 				filepaths = [path]
 							
-			try:	
-				ds = []
-			
-				# Add all the files.
-				for filepath in filepaths	:
-					try:						
-						mf = MediaFile(filepath)														
-						#lyr = self.download_lyrics( mf )												
-						#self.tag_file(mf, lyr)
-						
-						d = threads.deferToThread(self.download_lyrics, mf)	
-						d.addCallback( self.tag_file,mf )
-						
-						ds.append(d)									
-					except FileTypeError:												
-						continue
-					except UnreadableFileError:
-						log.warn('unreadable file: ' + filepath)
-						continue
-						
-						
-				dlist = defer.DeferredList(ds, consumeErrors=True)	
-				def stop_loop(x):	
-					print 'Done!'
-					reactor.stop()	
-					exit		
-				dlist.addCallback(stop_loop)
+			try:					
+				pool = multiprocessing.Pool(processes=5)
+				mthd = MethodProxy(self, self.process_filepath)
+				pool.map( mthd, filepaths)
+				pool.close()								
+				print "Done!"
 				
-				def err_call(x):
-					print x
-					exit	
-				dlist.addErrback(err_call)	
-			
-				reactor.run()		
-						
+			except KeyboardInterrupt:				
+				pool.terminate()
+								
 			except Exception, e:
 				print e
 								
+	def process_filepath( self, filepath):
+		try:		
+			mf = MediaFile(filepath)														
+			lyrics = self.download_lyrics(mf)
+			self.tag_file(lyrics, mf)
+		except KeyboardInterrupt:
+			raise KeyboardInterruptError()
+		except FileTypeError:												
+			return
+		except UnreadableFileError:
+			log.warn('unreadable file: ' + filepath)
+			return
+		except Exception, e:
+			print e
+			return		
+							
 	def download_lyrics(self, mf):		
 		try:
 			artist = scrub(mf.artist)
@@ -141,13 +136,5 @@ class LyricsPlugin(BeetsPlugin):
 		else:
 			print_("Lyrics for: [%s - %s]" % (mf.artist, mf.title), ui.colorize('red', 'Nothing Found'))
 		
-		
-		
-		
-		
-		
-		
-		
-		
-	
 
+		
