@@ -1,15 +1,12 @@
-#parts of this plugin were borrowed from https://github.com/Xjs/lyricwiki/blob/master/lyricwiki.py
 import os, logging, shutil, logging, sys, unicodedata
+from importlib import import_module
 
-from beets.plugins import BeetsPlugin
-from beets import autotag
+from beets import autotag, library, ui
 from beets.mediafile import MediaFile, FileTypeError, UnreadableFileError, FileTypeError
-from beets import library
-from beets import ui
-from beets.ui import print_
-from beets.ui import Subcommand
+from beets.plugins import BeetsPlugin
+from beets.ui import print_, Subcommand
 
-from beetsplug.lyrics.engines import *
+from engines import *
 from beetsplug.lyrics.engines.engine import *
 
 from twisted.internet import reactor, threads, defer
@@ -104,16 +101,28 @@ def lyrics_tag(engines, paths, force=False):
 			
 lyrics_cmd = Subcommand('lyrics', help='fetch lyrics')
 def lyrics_func(lib, config, opts, args):
+	#load force option
 	force  = opts.force  if opts.force  is not None else \
         ui.config_val(config, 'lyrics', 'force',
             DEFAULT_LYRICS_FORCE, bool)
 			
-	engines = ui.config_val(config, 'lyrics', 'engines', '').split()
+	#load engine options
+	engine_names = ui.config_val(config, 'lyrics', 'engines', '').split()
+	if( len(engine_names) == 0):
+		engine_names = DEFAULT_ENGINES
+
+	#load all requested engines
+	engines = []			
+	for eng_name in engine_names:								
+		try:
+			engines.append(  getattr(import_module(".engine_%s"%eng_name, 'beetsplug.lyrics.engines'),eng_name)(None,"utf-8")		)			
+		except Exception,e:						
+			print e
 	
-	if( len(engines) == 0):
-		engines = DEFAULT_ENGINES
+	#start tagging
+	lyrics_tag( engines, args, force)
 	
-	lyrics_tag(engines, args, force)
+	
 lyrics_cmd.func = lyrics_func
 lyrics_cmd.parser.add_option('-f', '--force', action='store_true', default=None, help='overwrite tag updates')
 
