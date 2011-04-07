@@ -106,8 +106,8 @@ class LyricsPlugin(BeetsPlugin):
 		lyrics_cmd = Subcommand('lyrics', help='fetch lyrics') 
 		lyrics_cmd.func = self.lyrics_func
 		lyrics_cmd.parser.add_option('-f', '--force', action='store_true', default=None, help='overwrite tag updates')
-		lyrics_cmd.parser.add_option('-p', '--processes', action='store_true', default=4, help='number of concurrent threads to run')
-
+		lyrics_cmd.parser.add_option('-p', '--processes', dest='processes', help='number of concurrent threads to run')
+		  
 		return [lyrics_cmd]  
 	
 
@@ -124,7 +124,7 @@ class LyricsPlugin(BeetsPlugin):
 
 		#load process count
 		self.processcount = opts.processes if opts.processes is not None else \
-		ui.config_val(config, 'lyrics', 'processes', DEFAULT_PROCESS_COUNT)
+		int(ui.config_val(config, 'lyrics', 'processes', DEFAULT_PROCESS_COUNT))
 
 		#load all requested engines  
 		for eng_name in engine_names:        
@@ -147,6 +147,7 @@ class LyricsPlugin(BeetsPlugin):
 			lyricsWriter.start()  
 
 			for i in xrange(self.processcount):				
+				print "worker created"
 				lf = self.LyricsFetcher(self.engines, fileQueue, lyricsQueue)
 				lf.setDaemon(True)
 				lf.start()
