@@ -146,8 +146,7 @@ class LyricsPlugin(BeetsPlugin):
 			lyricsWriter.setDaemon(True)
 			lyricsWriter.start()  
 
-			for i in xrange(self.processcount):				
-				print "worker created"
+			for i in xrange(self.processcount):								
 				lf = self.LyricsFetcher(self.engines, fileQueue, lyricsQueue)
 				lf.setDaemon(True)
 				lf.start()
