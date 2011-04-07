@@ -178,5 +178,5 @@ class LyricsPlugin(BeetsPlugin):
 			if( len(mf.lyrics) == 0 or self.force):
 				q.put(mf)    
 
-		except:   
+		except FileTypeError:   
 			return
