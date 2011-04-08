@@ -3,10 +3,36 @@ Hello!
 This is a lyrics plugin for the beets music managment system. 
 The engines module was borrowed from the lrcShow-X project [https://code.launchpad.net/lrcshow-x]. 
 
-
 The purpose of this plugin is to fetch lyrics for tracks and tag the files with them.
 There are two ways currently to use this plug. The first is via the command line ( beet lyrics <path> ) which will parse the directory and tag files whether or not they are in your library.
 The second is via import of albums/tracks which is the standard use.
+
+Installation:
+Clone the repository: 
+   mkdir ~/.beets
+   cd ~/.beets
+   git clone git://github.com/Lugoues/beets-lyrics.git
+Configure beets:
+  edit ~/.beetsconfig
+  add ~/.beets/beets-lyrics to 'pluginpath' line
+  add 'lyrics' to the 'plugins' line
+  
+Example:
+  [beets]
+  directory: /path/to/Music
+  library: ~/.beets/library.blb
+  import_copy: yes
+  import_art: yes
+  threaded: yes
+  color: yes
+  path_format: $artist/($year) $album/$track - $title
+  plugins: lyrics lastid
+  pluginpath: ~/.beets/beets-lyrics
+
+  [lyrics]
+  on_import:yes
+  processes:10
+
 
 Configuration:
 You can add '[lyrics]' to your beetsconfig file now with two options 
