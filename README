@@ -1,15 +1,23 @@
 Hello!
 
-This is a test plugin for the beets music managment system. The engines module was borrowed from the lrcShow-X project [https://code.launchpad.net/lrcshow-x]. 
+This is a lyrics plugin for the beets music managment system. 
+The engines module was borrowed from the lrcShow-X project [https://code.launchpad.net/lrcshow-x]. 
+
+
+The purpose of this plugin is to fetch lyrics for tracks and tag the files with them.
+There are two ways currently to use this plug. The first is via the command line ( beet lyrics <path> ) which will parse the directory and tag files whether or not they are in your library.
+The second is via import of albums/tracks which is the standard use.
 
 Configuration:
-You can add '[Lyrics]' to your beetsconfig file now with two options 
+You can add '[lyrics]' to your beetsconfig file now with two options 
 
-force: will force all updates all the time ( True, False)
-engines: space deliminated list of engines you wish to search (Defaults to all engines). Order will determine priority
+force: either yes or no, specify whether the lyrics plugin should overwrite any existing lyrics
+engines: space delaminated list of engines you wish to search (Defaults to all engines). Order will determine priority
     Available Engines:  ailrc, ALSong, baidu, cmdi, evillyrics, google, lrcdb, lyrdb, miniLyrics, sogou, ttPlayer, winampcn, youdao
-processes: number of consecutive files to tag
+processes: number of consecutive fetches 
+on_import: either yes or no, specifies whether lyrics should be automatically updated on import (defaults to yes)
 
 
 ToDo:
  - Add UI to allow users to compare old lyrics w/ new lyrics before updating
+ - Add ability to tag tracks via library interface

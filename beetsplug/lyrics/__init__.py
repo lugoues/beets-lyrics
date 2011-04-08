@@ -1,6 +1,7 @@
 import os, logging, logging, sys, multiprocessing, copy_reg, types, threading, time
 from Queue import Queue
 from importlib import import_module
+from collections import defaultdict
 
 from beets import autotag, ui
 from beets.mediafile import MediaFile, FileTypeError, UnreadableFileError
@@ -13,6 +14,7 @@ from beetsplug.lyrics.utilites import *
 DEFAULT_LYRICS_FORCE = False
 DEFAULT_ENGINES = ['miniLyrics', 'ailrc','ALSong', 'baidu', 'cdmi', 'lrcdb', 'lyrdb', 'sogou', 'ttPlayer', 'winampcn', 'youdao', 'evillyrics', 'google']
 DEFAULT_PROCESS_COUNT = 5
+DEFAULT_ON_IMPORT = True
 
 log = logging.getLogger('beets')
 log.addHandler(logging.StreamHandler())
@@ -26,6 +28,7 @@ class LyricsPlugin(BeetsPlugin):
 	locale = "utf-8"
 	force = False
 	processcount = 1
+	on_import = True
 
 	class LyricsFetcher(threading.Thread):
 		def __init__(self, engines, fileQueue, lyricsQueue):   
@@ -101,7 +104,11 @@ class LyricsPlugin(BeetsPlugin):
 			else:
 				print_("Lyrics for: [%s - %s]" % (mf.artist, mf.title), ui.colorize('red', 'Nothing Found'))
 
-
+	def __init__(self):		
+		#register listeners
+		self.listeners = defaultdict(list)
+		self.listeners['import'].append(self.filesImported)
+				
 	def commands(self):
 		lyrics_cmd = Subcommand('lyrics', help='fetch lyrics') 
 		lyrics_cmd.func = self.lyrics_func
@@ -109,30 +116,39 @@ class LyricsPlugin(BeetsPlugin):
 		lyrics_cmd.parser.add_option('-p', '--processes', dest='processes', help='number of concurrent threads to run')
 		  
 		return [lyrics_cmd]  
-	
-
-	def lyrics_func(self, lib, config, opts, args):
-	#load force option
-		self.force = opts.force if opts.force is not None else \
-			ui.config_val(config, 'lyrics', 'force',
-				DEFAULT_LYRICS_FORCE, bool)
-
+		
+	def configure(self, config):		
+		self.on_import = ui.config_val(config, 'lyrics', 'on_import', DEFAULT_ON_IMPORT, bool)		
+		self.processcount = int(ui.config_val(config, 'lyrics', 'processes', DEFAULT_PROCESS_COUNT))
+		
 		#load engine options
 		engine_names = ui.config_val(config, 'lyrics', 'engines', '').split()
 		if( len(engine_names) == 0):
 			engine_names = DEFAULT_ENGINES
-
-		#load process count
-		self.processcount = opts.processes if opts.processes is not None else \
-		int(ui.config_val(config, 'lyrics', 'processes', DEFAULT_PROCESS_COUNT))
-
+			
 		#load all requested engines  
 		for eng_name in engine_names:        
 			try:
 				self.engines.append( getattr(import_module(".engine_%s"%eng_name, 'beetsplug.lyrics.engines'),eng_name)(self.proxy, 'utf-8')  )   
 			except Exception,e:      
 				print e  
+	
+			
+	def filesImported(self, lib, paths):		
+		if self.on_import :
+			self.process_path(paths)
 
+	
+	def lyrics_func(self, lib, config, opts, args):
+		#load force option
+		self.force = opts.force if opts.force is not None else \
+			ui.config_val(config, 'lyrics', 'force',
+				DEFAULT_LYRICS_FORCE, bool)
+
+		#load process count
+		self.processcount = opts.processes if opts.processes is not None else \
+		int(ui.config_val(config, 'lyrics', 'processes', DEFAULT_PROCESS_COUNT))
+	
 		if len(args) != 0:
 			self.process_path(args)
 
@@ -180,3 +196,6 @@ class LyricsPlugin(BeetsPlugin):
 
 		except FileTypeError:   
 			return
+
+			
+
