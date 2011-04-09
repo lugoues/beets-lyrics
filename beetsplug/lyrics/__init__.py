@@ -104,10 +104,11 @@ class LyricsPlugin(BeetsPlugin):
 			else:
 				print_("Lyrics for: [%s - %s]" % (mf.artist, mf.title), ui.colorize('red', 'Nothing Found'))
 
-	def __init__(self):		
-		#register listeners
-		self.listeners = defaultdict(list)
-		self.listeners['import'].append(self.filesImported)
+#	def __init__(self):		
+#		#register listeners
+#		if self.listeners is None:
+#			self.listeners = defaultdict(list)
+#		self.listeners['import'].append(self.filesImported)
 				
 	def commands(self):
 		lyrics_cmd = Subcommand('lyrics', help='fetch lyrics') 
@@ -134,7 +135,7 @@ class LyricsPlugin(BeetsPlugin):
 				print e  
 	
 			
-	def filesImported(self, lib, paths):		
+	def filesImported(self, lib, paths):
 		if self.on_import :
 			self.process_path(paths)
 
