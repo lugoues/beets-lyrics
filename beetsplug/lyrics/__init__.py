@@ -39,12 +39,7 @@ class LyricsPlugin(BeetsPlugin):
 
 		def run(self):         
 			while True:    
-				mf = self.fileQueue.get()
-
-				if mf == None:
-					self.lyricsQueue.put((None,None))
-					self.fileQueue.task_done()     
-					break
+				mf = self.fileQueue.get()				
 
 				#print_("Lyrics for: [%s - %s] - Fetching" % (mf.artist, mf.title))
 				lyrics = self.fetchLyrics(mf)
@@ -86,11 +81,7 @@ class LyricsPlugin(BeetsPlugin):
 
 		def run(self):
 			while True:
-				mf, lyrics = self.lyricsQueue.get()    
-
-				if mf == None: 
-					self.lyricsQueue.task_done()
-					break;
+				mf, lyrics = self.lyricsQueue.get()    			
 
 				self.tag_file(mf, lyrics)
 
@@ -104,11 +95,11 @@ class LyricsPlugin(BeetsPlugin):
 			else:
 				print_("Lyrics for: [%s - %s]" % (mf.artist, mf.title), ui.colorize('red', 'Nothing Found'))
 
-#	def __init__(self):		
-#		#register listeners
-#		if self.listeners is None:
-#			self.listeners = defaultdict(list)
-#		self.listeners['import'].append(self.filesImported)
+	def __init__(self):		
+		#register listeners
+		if self.listeners is None:
+			self.listeners = defaultdict(list)
+		self.listeners['album_imported'].append(self.album_imported)
 				
 	def commands(self):
 		lyrics_cmd = Subcommand('lyrics', help='fetch lyrics') 
@@ -135,9 +126,10 @@ class LyricsPlugin(BeetsPlugin):
 				print e  
 	
 			
-	def filesImported(self, lib, paths):
+	def album_imported(self, album):						
 		if self.on_import :
-			self.process_path(paths)
+			item_paths = [item.path for item in album.items()]
+			self.process_path(item_paths)
 
 	
 	def lyrics_func(self, lib, config, opts, args):
@@ -179,12 +171,17 @@ class LyricsPlugin(BeetsPlugin):
 				else:
 					# Just add the file.
 					self.try_queue_path(fileQueue, path)       
-
-			#queue none to show end of file list
-			fileQueue.put(None)
-
-			#wait till we are finished 
-			while lyricsWriter.is_alive(): time.sleep(1)        
+			
+			def wait_for_queues():
+				#wait till we are finished 				
+				fileQueue.join()
+				lyricsQueue.join()				
+				
+			t = threading.Thread(target=wait_for_queues)
+			t.setDaemon(True)
+			t.start()
+						
+			while t.is_alive(): time.sleep(1)        				
 		except (KeyboardInterrupt, SystemExit):
 			return
 
