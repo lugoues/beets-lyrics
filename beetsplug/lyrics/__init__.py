@@ -173,13 +173,13 @@ class LyricsPlugin(BeetsPlugin):
                         yield mf
 
         def work():
+            mf = yield
             while True:
-                mf = yield
                 print_("    -%s:" % (mf.title), ui.colorize('yellow', 'Fetching'))
                 lyrics = self.fetchLyrics(scrub(mf.artist), scrub(mf.title))
                 result = (mf, lyrics);
                 print "worker results: %s" % str(result)
-                yield result
+                mf = yield result
 
         def consume():
             while True:
