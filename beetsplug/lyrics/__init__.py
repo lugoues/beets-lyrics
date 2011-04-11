@@ -19,7 +19,7 @@
 #THE SOFTWARE.
 
 import os, logging, logging, sys, multiprocessing, copy_reg, types, threading, time
-from Queue import Queue
+from Queue import *
 from importlib import import_module
 from collections import defaultdict
 
@@ -27,6 +27,7 @@ from beets import autotag, ui
 from beets.mediafile import MediaFile, FileTypeError, UnreadableFileError
 from beets.plugins import BeetsPlugin
 from beets.ui import print_, Subcommand
+from beets.util.pipeline import *
 
 from beetsplug.lyrics.engines.engine import *
 from beetsplug.lyrics.utilites import *
@@ -39,8 +40,6 @@ DEFAULT_ON_IMPORT = True
 log = logging.getLogger('beets')
 log.addHandler(logging.StreamHandler())
 
-silent_run = False
-
 class LyricsPlugin(BeetsPlugin):
     '''Lyrics plugin for beets'''
 
@@ -51,81 +50,25 @@ class LyricsPlugin(BeetsPlugin):
     processcount = 1
     on_import = True
 
-    class LyricsFetcher(threading.Thread):
-        def __init__(self, engines, fileQueue, lyricsQueue):
-            self.fileQueue = fileQueue
-            self.lyricsQueue = lyricsQueue
-            self.engines = engines
-            threading.Thread.__init__(self)
+    def fetchLyrics(self, artist, title):
+        try:
+            eng, lyrList = multiSearch(self.engines, artist, title)
+        except TypeError:
+            return None;
 
-        def run(self):
-            while True:
-                mf = self.fileQueue.get()
+        if( lyrList is None or len(lyrList) == 0):
+            return None
 
-                try:
-                #print_("Lyrics for: [%s - %s] - Fetching" % (mf.artist, mf.title))
-                    lyrics = self.fetchLyrics(mf)
-                    self.lyricsQueue.put( (mf, lyrics))
-                except Exception, e:
-                    print e
-                
-                self.fileQueue.task_done()
+        if( len(lyrList) == 1):
+            lyr, timeOut = eng.downIt(lyrList[0][2])
+        else:
+        #todo: allow user to select?
+            lyr, timeOut = eng.downIt(lyrList[0][2])
 
-
-        def fetchLyrics(self, mf):
-            try:
-                artist = scrub(mf.artist)
-                title = scrub(mf.title)
-            except Exception, e:
-                print e
-
-            try:
-                eng, lyrList = multiSearch(self.engines, artist, title)
-            except TypeError:
-                return None;
-
-            if( lyrList is None or len(lyrList) == 0):
-                return None
-
-            if( len(lyrList) == 1):
-                lyr, timeOut = eng.downIt(lyrList[0][2])
-            else:
-            #todo: allow user to select?
-                lyr, timeOut = eng.downIt(lyrList[0][2])
-
-            if( not timeOut):
-                return unicode(lyr, 'utf-8')
-            else:
-                return None
-
-
-    class LyricsWriter(threading.Thread):
-        def __init__(self, lyricsQueue, silent_run):
-            self.lyricsQueue = lyricsQueue
-            self.silent_run = silent_run
-            threading.Thread.__init__(self)
-
-        def run(self):
-            while True:
-                try:
-                    mf, lyrics = self.lyricsQueue.get()
-    
-                    self.tag_file(mf, lyrics)
-                        
-                except Exception, e:
-                    print e
-                
-                self.lyricsQueue.task_done()
-
-        def tag_file(self, mf, lyrics):
-            if( lyrics ):
-                mf.lyrics = lyrics
-                mf.save()
-                                
-                if not self.silent_run:
-                    print_("     -%s:" % (mf.title), ui.colorize('green', 'Updated!'))
-            else:
-                print_("    -%s: " % (mf.title), ui.colorize('red', 'Not Found'))
+        if( not timeOut):
+            return unicode(lyr, 'utf-8')
+        else:
+            return None
 
     def __init__(self):
         #register listeners
@@ -155,15 +98,43 @@ class LyricsPlugin(BeetsPlugin):
             except Exception,e:
                 print e
 
+    def item_imported(self, lib, item):
+        lyrics = self.fetchLyrics(scrub(item.artist), scrub(item.title))
 
-    def album_imported(self, album):
-        if self.on_import :            
-            print_("Tagging Lyrics:  %s - %s" % (album.albumartist, album.album))
-            item_paths = [item.path for item in album.items()]
-            self.process_path(item_paths, True)
+        item.lyrics = lyrics
+        item.write()
+        lib.store(item)
+
+
+    def album_imported(self, lib, album):
+        if self.on_import == False :
+            pass
+        print_("Tagging Lyrics:  %s - %s" % (album.albumartist, album.album))
+
+        def produce():
+            def create_mf(path):
+                for item in album.items():
+                    yield(item, item.artist, item.title)
+
+        def work():
+            while True:
+                item, artist, title = yield
+                lyrics = self.fetchLyrics(scrub(artist), scrub(title))
+                yield((item, lyrics))
+
+        def consume():
+            while True:
+                item, lyrics = yield
+                item.lyrics = lyrics
+                item.write()
+                lib.store(item)
+
+
+        Pipeline([produce(), work(), consume()]).run_parallel(1)
 
 
     def lyrics_func(self, lib, config, opts, args):
+        pass
         #load force option
         self.force = opts.force if opts.force is not None else \
             ui.config_val(config, 'lyrics', 'force',
@@ -171,57 +142,58 @@ class LyricsPlugin(BeetsPlugin):
 
         #load process count
         self.processcount = opts.processes if opts.processes is not None else \
-        int(ui.config_val(config, 'lyrics', 'processes', DEFAULT_PROCESS_COUNT))
+        int(ui.config_val(  config, 'lyrics', 'processes', DEFAULT_PROCESS_COUNT))
 
         if len(args) != 0:
             self.process_path(args)
 
-    def process_path(self, basePath, silent_run = False):
-        try:
-            fileQueue = Queue()
-            lyricsQueue = Queue()
-
-            #spawn threads
-            lyricsWriter = self.LyricsWriter(lyricsQueue, silent_run)
-            lyricsWriter.setDaemon(True)
-            lyricsWriter.start()
-
-            for i in xrange(self.processcount):
-                lf = self.LyricsFetcher(self.engines, fileQueue, lyricsQueue)
-                lf.setDaemon(True)
-                lf.start()
-
-            #loop path and add files to parse
+    def process_path(self, basePath):
+        def produce():
+            def create_mf(path):
+                try:
+                    mf = MediaFile(path)
+                    if( len(mf.lyrics) == 0 or self.force):
+                        #print_("    -%s:" % (mf.title), ui.colorize('yellow', 'Queued'))
+                        return mf
+                except FileTypeError:
+                    return BUBBLE
             for path in basePath:
                 if os.path.isdir(path):
                 # Find all files in the directory.
                     filepaths = []
                     for root, dirs, files in autotag._sorted_walk(path):
                         for filename in files:
-                            self.try_queue_path(fileQueue, os.path.join(root, filename))
+                            mf = create_mf(os.path.join(root, filename))
+                            if mf != None:
+                                yield mf
                 else:
                     # Just add the file.
-                    self.try_queue_path(fileQueue, path)
+                    mf = create_mf(path)
+                    if mf != None:
+                        yield mf
 
-            def wait_for_queues():
-                #wait till we are finished
-                fileQueue.join()
-                lyricsQueue.join()
+        def work():
+            while True:
+                mf = yield
+                print_("    -%s:" % (mf.title), ui.colorize('yellow', 'Fetching'))
+                lyrics = self.fetchLyrics(scrub(mf.artist), scrub(mf.title))
+                result = (mf, lyrics);
+                print "worker results: %s" % str(result)
+                yield result
 
-            t = threading.Thread(target=wait_for_queues)
-            t.setDaemon(True)
-            t.start()
+        def consume():
+            while True:
+                res = yield
+                print res
+                if res != None:
+                    mf, lyrics = res
+                    if( lyrics ):
+                        mf.lyrics = lyrics
+                        mf.save()
 
-            while t.is_alive(): time.sleep(1)
-        except (KeyboardInterrupt, SystemExit):
-            return
+                        print_("    -%s:" % (mf.title), ui.colorize('green', 'Updated!'))
+                    else:
+                        print_("    -%s: " % (mf.title), ui.colorize('red', 'Not Found'))
 
-    def try_queue_path(self, q, path):
-        try:
-            mf = MediaFile(path)
 
-            if( len(mf.lyrics) == 0 or self.force):
-                q.put(mf)
-
-        except FileTypeError:
-            return
+        Pipeline([produce(), work(), consume()]).run_parallel(1)
