@@ -18,19 +18,18 @@
 #OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 #THE SOFTWARE.
 
-import os, logging, logging, sys, multiprocessing, copy_reg, types, threading, time
-from Queue import *
+import os, logging, sys, types, operator
+
 from importlib import import_module
-from collections import defaultdict
 
 from beets import autotag, ui
 from beets.mediafile import MediaFile, FileTypeError, UnreadableFileError
 from beets.plugins import BeetsPlugin
 from beets.ui import print_, Subcommand
-from beets.util.pipeline import *
 
 from beetsplug.lyrics.engines.engine import *
 from beetsplug.lyrics.utilites import *
+from beetsplug.lyrics.stream import ThreadedFeeder, ThreadPool, map, apply, filter
 
 DEFAULT_LYRICS_FORCE = False
 DEFAULT_ENGINES = ['miniLyrics', 'ailrc','ALSong', 'baidu', 'cdmi', 'lrcdb', 'lyrdb', 'sogou', 'ttPlayer', 'winampcn', 'youdao', 'evillyrics', 'google']
@@ -73,6 +72,7 @@ class LyricsPlugin(BeetsPlugin):
     def __init__(self):
         #register listeners
         self.register_listener('album_imported', self.album_imported)
+        self.register_listener('item_imported', self.item_imported)
 
     def commands(self):
         lyrics_cmd = Subcommand('lyrics', help='fetch lyrics')
@@ -105,33 +105,24 @@ class LyricsPlugin(BeetsPlugin):
         item.write()
         lib.store(item)
 
-
     def album_imported(self, lib, album):
         if self.on_import == False :
             pass
+
         print_("Tagging Lyrics:  %s - %s" % (album.albumartist, album.album))
 
-        def produce():
-            def create_mf(path):
-                for item in album.items():
-                    yield(item, item.artist, item.title)
+        def fetch(item, artist, title):
+            lyrics = self.fetchLyrics(scrub(artist), scrub(title))
+            return (item, lyrics)
 
-        def work():
-            while True:
-                item, artist, title = yield
-                lyrics = self.fetchLyrics(scrub(artist), scrub(title))
-                yield((item, lyrics))
+        def tag( item, lyrics):
+            item.lyrics = lyrics
+            item.write()
+            lib.store(item)
 
-        def consume():
-            while True:
-                item, lyrics = yield
-                item.lyrics = lyrics
-                item.write()
-                lib.store(item)
-
-
-        Pipeline([produce(), work(), consume()]).run_parallel(1)
-
+        [(item, item.artist, item.title) for item in album.items()]  \
+            >> ThreadPool(apply(fetch), poolsize=self.processcount)  \
+            >> apply(tag)
 
     def lyrics_func(self, lib, config, opts, args):
         pass
@@ -156,44 +147,44 @@ class LyricsPlugin(BeetsPlugin):
                         #print_("    -%s:" % (mf.title), ui.colorize('yellow', 'Queued'))
                         return mf
                 except FileTypeError:
-                    return BUBBLE
+                     return None
+
             for path in basePath:
                 if os.path.isdir(path):
                 # Find all files in the directory.
                     filepaths = []
                     for root, dirs, files in autotag._sorted_walk(path):
                         for filename in files:
-                            mf = create_mf(os.path.join(root, filename))
-                            if mf != None:
-                                yield mf
+                            yield create_mf(os.path.join(root, filename))
                 else:
                     # Just add the file.
-                    mf = create_mf(path)
-                    if mf != None:
-                        yield mf
+                    yield create_mf(path)
 
-        def work():
-            mf = yield
-            while True:
+
+        def fetch(mf):
+            try:
                 print_("    -%s:" % (mf.title), ui.colorize('yellow', 'Fetching'))
                 lyrics = self.fetchLyrics(scrub(mf.artist), scrub(mf.title))
                 result = (mf, lyrics);
-                print "worker results: %s" % str(result)
-                mf = yield result
+                return result
+            except:
+                return None
 
-        def consume():
-            while True:
-                res = yield
-                print res
-                if res != None:
-                    mf, lyrics = res
-                    if( lyrics ):
-                        mf.lyrics = lyrics
-                        mf.save()
+        def tag(mf, lyrics):
+            try:
+                if( lyrics ):
+                    mf.lyrics = lyrics
+                    mf.save()
 
-                        print_("    -%s:" % (mf.title), ui.colorize('green', 'Updated!'))
-                    else:
-                        print_("    -%s: " % (mf.title), ui.colorize('red', 'Not Found'))
+                    print_("    -%s:" % (mf.title), ui.colorize('green', 'Updated!'))
+                else:
+                    print_("    -%s: " % (mf.title), ui.colorize('red', 'Not Found'))
+            except:
+                return
 
+         #setup and run the pipeline
+        ThreadedFeeder(produce) \
+            >> filter( lambda itm: itm != None) \
+            >> ThreadPool(map(fetch), poolsize=self.processcount) \
+            >> ThreadPool(apply(tag), poolsize=1)
 
-        Pipeline([produce(), work(), consume()]).run_parallel(1)
