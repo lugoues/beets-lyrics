@@ -113,17 +113,26 @@ class LyricsPlugin(BeetsPlugin):
         print_("Tagging Lyrics:  %s - %s" % (album.albumartist, album.album))
 
         def fetch(item, artist, title):
-            lyrics = self.fetchLyrics(scrub(artist), scrub(title))
-            return (item, lyrics)
-
+            try:
+                #print_("    -%s:" % (title), ui.colorize('yellow', 'Fetching'))
+                lyrics = self.fetchLyrics(scrub(artist), scrub(title))
+                return (item, lyrics)
+            except:
+                return None
+                
         def tag( item, lyrics):
-            item.lyrics = lyrics
-            item.write()
-            lib.store(item)
-
+            try:
+                #print_("    -%s:" % (item.title), ui.colorize('green', 'Updated!'))
+                item.lyrics = lyrics
+                item.write()
+                lib.store(item)
+            except:
+                pass
+                
         [(item, item.artist, item.title) for item in album.items()]  \
             >> ThreadPool(apply(fetch), poolsize=self.processcount)  \
-            >> apply(tag)
+            >> filter( lambda itm: itm != None) \
+            >> ThreadPool(apply(tag), poolsize=1)
 
     def lyrics_func(self, lib, config, opts, args):
         pass
