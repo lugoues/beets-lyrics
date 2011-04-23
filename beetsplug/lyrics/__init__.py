@@ -22,7 +22,8 @@ import os, logging, sys, types, operator
 
 from importlib import import_module
 
-from beets import autotag, ui
+from beets import  ui
+from beets.util import sorted_walk
 from beets.mediafile import MediaFile, FileTypeError, UnreadableFileError
 from beets.plugins import BeetsPlugin
 from beets.ui import print_, Subcommand
@@ -153,7 +154,7 @@ class LyricsPlugin(BeetsPlugin):
                 if os.path.isdir(path):
                 # Find all files in the directory.
                     filepaths = []
-                    for root, dirs, files in autotag._sorted_walk(path):
+                    for root, dirs, files in sorted_walk(path):
                         for filename in files:
                             yield create_mf(os.path.join(root, filename))
                 else:
